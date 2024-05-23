@@ -8,7 +8,7 @@ from flask_swagger import swagger
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
-from models import db, User, Planets, People, FavoritePlanets
+from models import db, User, Planets, People, FavoritePlanets, FavoritePeople
 #from models import Person
 
 app = Flask(__name__)
@@ -107,13 +107,21 @@ def get_favorites(id):
     #print(favorite_planets)
     favorite_planets_serialized = list(map(lambda planet: planet.serialize(), favorite_planets))
     """
+    # Obtener planetas favoritos
     favorite_planets = db. session.query(FavoritePlanets, Planets).\
         join(Planets).filter(FavoritePlanets.user_id==id).all()
     favorite_planets_serialized =[]
     for favorite_planet, planet in favorite_planets:
         favorite_planets_serialized.append({"favorite_planet_id": favorite_planet.id, "planet": planet.serialize()})
     print(favorite_planets)
-    return jsonify({"msg": "OK", "favorite_planets": favorite_planets_serialized})
+   
+     # Obtener personajes favoritos
+    favorite_people = db.session.query(FavoritePeople, People).join(People).filter(FavoritePeople.user_id == id).all()
+    favorite_people_serialized = []
+    for favorite_person, person in favorite_people:
+        favorite_people_serialized.append({"favorite_people_id": favorite_person.id, "person": person.serialize()})
+
+    return jsonify({"msg": "OK", "favorite_planets": favorite_planets_serialized, "favorite_people": favorite_people_serialized}), 200
 
 
 @app.route('/planet', methods=['POST'])
@@ -158,6 +166,69 @@ def new_people():
     db.session.commit()
 
     return jsonify({"msg": "Nuevo personaje creado", "data": new_person.serialize()}), 201
+
+
+@app.route('/favorite', methods=['POST'])
+def add_favorite():
+    body = request.get_json(silent=True)
+    user_id = body.get("user_id", None)
+    favorite_id = body.get("favorite_id", None)
+    favorite_type = body.get("favorite_type", None)
+    if not user_id:
+        return jsonify({"msg": "El campo user_id es obligatorio"}), 400
+
+    if not favorite_id:
+        return jsonify({"msg": "El campo favorite_id es obligatorio"}), 400
+    
+    if not favorite_type:
+        return jsonify({"msg": "El campo favorite_type es obligatorio"}), 400
+    
+    user = User.query.get(user_id)
+    if user is None:
+        return jsonify({"msg": f"El usuario con ID {user_id} no existe"}), 404
+    
+    if favorite_type == "planet":
+        planet = Planets.query.get(favorite_id)
+        if planet is None:
+            return jsonify({"msg": f"El planeta con ID {favorite_id} no existe"}), 404
+
+        favorite_planet = FavoritePlanets(user_id=user_id, planet_id=favorite_id)
+        db.session.add(favorite_planet)
+        db.session.commit()
+
+        return jsonify({"msg": "Planeta favorito añadido", "favorite planet": favorite_planet.serialize()}), 201
+
+    if favorite_type == "people":
+        person = People.query.get(favorite_id)
+        if person is None:
+            return jsonify({"msg": f"El planeta con ID {favorite_id} no existe"}), 400
+        
+        favorite_person = FavoritePeople(user_id=user_id, people_id=favorite_id)
+        db.session.add(favorite_person)
+        db.session.commit()
+
+        return jsonify({"msg": "Personaje favorito añadido", "favorite people": favorite_person.serialize()}), 201
+        
+  
+@app.route('/favorite/planet/<int:user_id>/<int:planet_id>', methods=['DELETE'])
+def delete_favorite_planet(user_id, planet_id):
+    favorite_planet = FavoritePlanets.query.filter_by(user_id=user_id, planet_id=planet_id).first()
+    if favorite_planet is None:
+        return jsonify({"msg": f"No se encontró el planeta favorito con ID {planet_id} para el usuario con ID {user_id}"}), 404
+
+    db.session.delete(favorite_planet)
+    db.session.commit()
+    return jsonify({"msg": "Planeta favorito eliminado correctamente"}), 200
+
+@app.route('/favorite/people/<int:user_id>/<int:people_id>', methods=['DELETE'])
+def delete_favorite_people(user_id, people_id):
+    favorite_people = FavoritePeople.query.filter_by(user_id=user_id, people_id=people_id).first()
+    if favorite_people is None:
+        return jsonify({"msg": f"No se encontró el personaje favorito con ID {people_id} para el usuario con ID {user_id}"}), 404
+
+    db.session.delete(favorite_people)
+    db.session.commit()
+    return jsonify({"msg": "Personaje favorito eliminado correctamente"}), 200
 
 
 

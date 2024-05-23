@@ -105,6 +105,7 @@ class FavoritePeople(db.Model):
     def __repr__(self):
         return f"al usuario {self.user_id} le gusta el personaje {self.people_id}"
     
+    
     def serialize(self):
         return {
             "id": self.id,
